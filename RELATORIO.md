@@ -2,9 +2,7 @@
 
 **Disciplina:** Visão Computacional, UFMS
 
-**Integrantes:** Jerfferson Jorge e Rafael Tsutomu
-
-**Trabalho Final**
+**Alunos:** Jerfferson Jorge e Rafael Tsutomu
 
 ---
 
@@ -314,13 +312,11 @@ se confirma como o alvo mais promissor para trabalhos futuros.
 
 ## 8. Referências
 
-1. **Long, J., Shelhamer, E., Darrell, T.** (2015). *Fully Convolutional Networks for Semantic Segmentation.* CVPR.
-2. **Ronneberger, O., Fischer, P., Brox, T.** (2015). *U-Net: Convolutional Networks for Biomedical Image Segmentation.* MICCAI.
-3. **Chen, L.-C., Zhu, Y., Papandreou, G., Schroff, F., Adam, H.** (2018). *Encoder-Decoder with Atrous Separable Convolution for Semantic Image Segmentation (DeepLabV3+).* ECCV.
-4. **Milletari, F., Navab, N., Ahmadi, S.-A.** (2016). *V-Net: Fully Convolutional Neural Networks for Volumetric Medical Image Segmentation.* 3DV. (Dice loss)
-5. **Sudre, C. H. et al.** (2017). *Generalised Dice Overlap as a Deep Learning Loss Function for Highly Unbalanced Segmentations.* DLMIA.
-6. **He, K., Zhang, X., Ren, S., Sun, J.** (2016). *Deep Residual Learning for Image Recognition (ResNet).* CVPR.
-7. **Ioffe, S., Szegedy, C.** (2015). *Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift.* ICML.
-8. **Kingma, D. P., Ba, J.** (2015). *Adam: A Method for Stochastic Optimization.* ICLR.
-9. **Parkhi, O. M., Vedaldi, A., Zisserman, A., Jawahar, C. V.** (2012). *Cats and Dogs (Oxford-IIIT Pet Dataset).* CVPR.
-10. **Paszke, A. et al.** (2019). *PyTorch: An Imperative Style, High-Performance Deep Learning Library.* NeurIPS. Documentação: PyTorch e torchvision.
+1. Long, Jonathan, Evan Shelhamer, and Trevor Darrell. "Fully convolutional networks for semantic segmentation." Proceedings of the IEEE conference on computer vision and pattern recognition. 2015.
+2. Ronneberger, Olaf, Philipp Fischer, and Thomas Brox. "U-net: Convolutional networks for biomedical image segmentation." International Conference on Medical image computing and computer-assisted intervention. Cham: Springer international publishing, 2015.
+3. Chen, Liang-Chieh, et al. "Encoder-decoder with atrous separable convolution for semantic image segmentation." Proceedings of the European conference on computer vision (ECCV). 2018.
+4. Sudre, Carole H., et al. "Generalised dice overlap as a deep learning loss function for highly unbalanced segmentations." International Workshop on Deep Learning in Medical Image Analysis. Cham: Springer International Publishing, 2017.
+5. He, Kaiming, et al. "Deep residual learning for image recognition." Proceedings of the IEEE conference on computer vision and pattern recognition. 2016.
+
+### Dataset
+[Omkar M Parkhi and Andrea Vedaldi and Andrew Zisserman and C. V. Jawahar: The Oxford-IIIT Pet Dataset](https://www.robots.ox.ac.uk/~vgg/data/pets/)
