@@ -29,7 +29,7 @@ predições.
 
 ## 2. Base de imagens
 
-A base utilizada foi a Oxford-IIIT Pet (Parkhi et al., 2012), carregada por meio de
+A base utilizada foi a Oxford-IIIT Pet, carregada por meio de
 `torchvision.datasets.OxfordIIITPet` com `target_types="segmentation"`, o que faz o download dos
 dados automaticamente. O conjunto reúne 7.349 imagens de 37 raças de cães e gatos, e cada imagem
 possui uma máscara *trimap* anotada pixel a pixel.
