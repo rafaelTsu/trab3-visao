@@ -1,126 +1,93 @@
-# Planejamento — Trabalho Final de Visão Computacional
+# Planejamento do Projeto — Trabalho Final de Visão Computacional
 
-## Segmentação Semântica no Oxford-IIIT Pet
+## Visão geral
 
-**Disciplina:** Visão Computacional — UFMS
-**Integrantes:** Rafael Tsutomu e Jerfferson Jorge
+- **Tarefa:** Segmentação semântica de imagens.
+- **Abordagem:** comparativo de **3 arquiteturas implementadas do zero** — **FCN-8s**, **U-Net** e **DeepLabV3+** — mais experimentos controlados (ablações).
+- **Dataset:** Oxford-IIIT Pet (trimap de 3 classes: animal, fundo, borda), baixado automaticamente pelo `torchvision`.
+- **Hardware-alvo:** Google Colab / Kaggle (GPU).
+- **Grupo:** Jerfferson Jorge e Rafael Tsutomu.
+- **Formato do código:** um único notebook (`trabalho_final.ipynb`), no estilo "do Zero" dos notebooks do professor.
 
----
+A escolha de segmentação dá continuidade ao Trabalho 2 (classificação com CNN do zero), reutiliza as
+convenções do professor (PyTorch, arquiteturas construídas na mão, células de verificação) e usa três
+arquiteturas que formam uma linha evolutiva (FCN → U-Net → DeepLabV3+), com métricas próprias de
+segmentação (IoU, Dice, pixel accuracy).
 
-## Contexto
+## O que é feito do zero vs. o que usamos pronto
 
-O trabalho final (ver `trab3/trabalho_final.pdf`) é um projeto prático de Deep Learning
-em uma de três tarefas (classificação, detecção ou segmentação), acompanhado de um
-relatório técnico no formato da seção experimental de um artigo, com 6 itens
-obrigatórios: **Base de imagens, Metodologia, Experimentos, Resultados, Discussão e
-Referências**.
-
-Escolhemos **segmentação semântica** por ser distinta da tarefa do Trabalho 2
-(classificação) e por ser bem coberta pelos exemplos do professor
-(`codigo_exemplo/segmentation.ipynb` — U-Net; `codigo_exemplo/deeplabv3plus.ipynb` —
-DeepLabV3+).
-
-### Critérios herdados do Trabalho 2
-
-1. Split fixo e reprodutível (`SEED = 42`).
-2. Conjunto de teste usado **apenas na avaliação final**.
-3. **Todos os modelos treinados do zero** (sem pesos pré-treinados / sem transfer learning).
-4. Estrutura baseline + experimentos controlados + análise por classe + relatório em Markdown.
-
----
-
-## Escolhas técnicas
-
-| Item | Escolha | Justificativa |
+| Componente | Do zero (na mão) | Pronto (biblioteca) |
 |---|---|---|
-| Tarefa | Segmentação semântica | Distinta do Trab 2; coberta pelos exemplos do professor. |
-| Dataset | **Oxford-IIIT Pet** (máscaras) | Público, `torchvision.datasets.OxfordIIITPet(target_types="segmentation")`, ~7.349 imagens, leve para Colab. |
-| Classes | 3: animal / fundo / contorno | Trimap remapeado `{1,2,3}→{0,1,2}`. Classe *contorno* é minoritária → desbalanceamento análogo ao Trab 2. |
-| Arquiteturas | **U-Net do zero** (baseline) + **DeepLabV3+ do zero** (backbone ResNet-50 sem pesos ImageNet) | Comparação arquitetural (Experimento 1). |
-| Perda | CrossEntropy / Dice / CE+Dice | Dice ajuda a classe minoritária (contorno). |
-| Otimizador | Adam (lr=1e-3) | Padrão dos exemplos do professor. |
-| Métricas | mean IoU, IoU por classe, Dice, pixel accuracy | Exatamente as sugeridas no enunciado para segmentação. |
-| Execução | Notebook `.ipynb` no Google Colab (GPU) | Confirmado. |
+| **As 3 arquiteturas** (FCN-8s, U-Net, DeepLabV3+) | blocos e `forward` de cada uma (`DoubleConv`/skips na U-Net; fusão de skips no FCN; `ASPP`+atrous no DeepLabV3+; `BasicBlock` da ResNet), init Kaiming | primitivas `nn.Conv2d/BatchNorm2d/ReLU/ConvTranspose2d/MaxPool2d` |
+| **Loop de treino/validação** | `train_one_epoch`, `evaluate`, `fit` (history + checkpoint do melhor mIoU) | `torch.optim.Adam`, `CosineAnnealingLR` |
+| **Funções de perda** | **Dice loss** e **combo CE+Dice** | `nn.CrossEntropyLoss` |
+| **Métricas** | **IoU/mIoU**, **Dice**, **pixel accuracy** (via matriz de confusão) | — |
+| **Dataset / transforms conjuntas** | `JointTransform` (img+máscara sincronizadas), remap do trimap | `torchvision.datasets.OxfordIIITPet`, `transforms.functional` |
+| **Transfer learning (1 ablação)** | acoplamento do encoder ResNet ao decoder U-Net | `torchvision.models.resnet34` (somente pesos ImageNet) |
+| **Gráficos** | montagem das figuras | `matplotlib` |
 
----
-
-## Arquivos do projeto
+## Estrutura de arquivos
 
 ```
 trab3/
-├── PLANEJAMENTO.md          # este documento
-├── trabalho_final.pdf       # enunciado
-├── segmentacao_pets.ipynb   # notebook principal (Colab/GPU), modelos do zero
-├── RELATORIO.md             # relatório técnico (6 seções do enunciado)
-└── imagens/                 # figuras geradas (amostras, curvas, IoU por classe, overlays)
+├── PLANEJAMENTO.md       # este arquivo
+├── README.md             # instruções de execução (Colab + local)
+├── RELATORIO.md          # relatório técnico (6 itens do enunciado)
+├── requirements.txt
+├── trabalho_final.ipynb  # ÚNICO notebook (dados, 3 modelos, treino, experimentos, avaliação)
+└── imagens/              # figuras geradas para o relatório
 ```
 
----
+## Seções do notebook
 
-## Estrutura do notebook `segmentacao_pets.ipynb`
+| Seção | Conteúdo |
+|---|---|
+| 0. Setup | imports, dispositivo, `SEED=42`, hiperparâmetros globais |
+| 1. Dados | OxfordIIITPet, remap do trimap (1/2/3→0/1/2), split 80/20 (seed=42), dataloaders, amostras |
+| 2. Métricas | IoU/mIoU, Dice, pixel accuracy (do zero) + teste trivial |
+| 3. Perdas | CrossEntropy (base), Dice e CE+Dice (do zero) |
+| 4. Motor de treino | `train_one_epoch`, `evaluate`, `fit` (history + checkpoint do melhor mIoU) |
+| 5. U-Net (do zero) | + verificação de shapes/params + overfit de 1 batch |
+| 6. FCN-8s (do zero) | + verificação |
+| 7. DeepLabV3+ (do zero) | backbone ResNet atrous + ASPP + decoder + verificação |
+| 8. Comparativo | treina as 3 no mesmo setup; tabela + curvas |
+| 9. Ablações | perda, data augmentation, BatchNorm, transfer learning |
+| 10. Avaliação final | melhor modelo no teste oficial; matriz de confusão, distribuição por imagem e grade de predições |
 
-1. **Setup** — imports, device GPU, `SEED=42` em `random`/`numpy`/`torch`.
-2. **Dataset** — `OxfordIIITPet(target_types="segmentation")`; split oficial
-   3.680 trainval / 3.669 teste; trainval → treino/val 90/10 com seed fixa.
-3. **Transforms conjuntos (imagem+máscara)** — Resize 128×128 (máscara *nearest*),
-   normalização ImageNet; augmentation geométrica igual para imagem e máscara
-   (`RandomResizedCrop`, `RandomHorizontalFlip`, `RandomRotation`) + `ColorJitter`
-   só na imagem.
-4. **Visualização** — amostras com máscara em overlay + distribuição de pixels por classe.
-5. **Métricas** — `compute_iou` (mIoU e por classe), `dice_coefficient`, `pixel_accuracy`.
-6. **U-Net do zero** (baseline) — blocos down/up (base: `segmentation.ipynb`).
-7. **DeepLabV3+ do zero** — backbone ResNet-50 do zero (Kaiming init, sem ImageNet),
-   ASPP + decoder (base: `deeplabv3plus.ipynb`).
-8. **Helpers de treino** — `train_one_epoch`, `evaluate`, dict `history`.
-9. **Experimentos controlados** (espelhando o Trab 2):
-   - **Exp 1 — Arquitetura:** U-Net vs DeepLabV3+ (mesmo treino/épocas).
-   - **Exp 2 — Função de perda:** CrossEntropy vs Dice vs CE+Dice.
-   - **Exp 3 — Data augmentation:** com vs sem.
-   - *Sem experimento de transfer learning (restrição: tudo treinado do zero).*
-10. **Avaliação final no teste** — melhor modelo; mIoU/Dice/pixel acc; IoU por classe;
-    predições visuais (original | máscara real | predição).
-11. **Conclusões**.
+## Plano de experimentos
 
-### Hiperparâmetros base
-- Entrada 128×128; `batch_size` 16; Adam `lr=1e-3`; ~30 épocas; semente fixa.
+**Principal — comparativo de arquiteturas:** FCN-8s vs U-Net vs DeepLabV3+, mesmo setup (CE,
+mesmas épocas, sem augmentation, `seed=42`). Comparados por mIoU/Dice/pixel acc, nº de parâmetros e
+tempo de treino.
 
----
+**Ablações (na melhor arquitetura do comparativo):**
+1. Função de perda: CE vs Dice vs CE+Dice.
+2. Data augmentation: com vs sem (flip, affine, color jitter — só no treino).
+3. BatchNorm: com vs sem (U-Net, via `use_bn`).
+4. Transfer learning: encoder ResNet-34 pré-treinado (ImageNet) vs do zero.
 
-## Relatório `RELATORIO.md` (mapeado aos 6 itens do enunciado)
+**Hiperparâmetros base:** `Adam lr=1e-3`, `batch_size=16`, `epochs=30` (reduzir para teste rápido),
+`CosineAnnealingLR`, entrada `128×128` (usar `256` para o resultado final).
 
-1. **Base de imagens** — nome (Oxford-IIIT Pet), fonte (Parkhi et al., 2012), quantidade
-   (7.349), 3 classes do trimap, divisão treino/val/teste, exemplos visuais.
-2. **Metodologia** — tarefa (segmentação), arquiteturas (U-Net e DeepLabV3+ do zero),
-   pré-processamento, augmentation, hiperparâmetros, ferramentas (PyTorch/torchvision).
-3. **Experimentos** — tabela-resumo das 3 comparações controladas.
-4. **Resultados** — tabelas (mIoU, Dice, pixel acc, IoU por classe), curvas de treino,
-   IoU por classe, predições visuais.
-5. **Discussão** — pontos fortes, limitações (ex.: contorno fino perdido em 128×128),
-   dificuldades (sincronizar augmentation imagem/máscara, memória/tempo do treino do
-   zero), melhorias futuras (resolução maior, Lovász loss, pós-processamento CRF).
-6. **Referências** — lista abaixo.
+## Métricas (adequadas a segmentação)
 
----
+IoU por classe e mIoU (principal), Dice coefficient, pixel accuracy, curvas de loss/mIoU por época e
+exemplos visuais (imagem | ground-truth | predição).
 
-## Referências
+## Referências principais
 
-- Ronneberger et al. (2015) — *U-Net: Convolutional Networks for Biomedical Image Segmentation*.
-- Chen et al. (2018) — *Encoder-Decoder with Atrous Separable Convolution (DeepLabV3+)*.
-- Long et al. (2015) — *Fully Convolutional Networks for Semantic Segmentation (FCN)*.
-- He et al. (2016) — *Deep Residual Learning (ResNet)* — backbone treinado do zero.
-- Milletari et al. (2016) — *V-Net / Dice loss*.
-- Parkhi et al. (2012) — *Cats and Dogs (Oxford-IIIT Pet dataset)*.
-- Ioffe & Szegedy (2015) — *Batch Normalization*; Kingma & Ba (2015) — *Adam*.
-- Documentação PyTorch / torchvision.
+- Long, Shelhamer, Darrell (2015) — **FCN**.
+- Ronneberger, Fischer, Brox (2015) — **U-Net**.
+- Chen et al. (2018) — **DeepLabV3+**.
+- Milletari et al. (2016) — **Dice loss (V-Net)**; Sudre et al. (2017) — Generalised Dice.
+- He et al. (2016) — **ResNet**; Ioffe & Szegedy (2015) — **BatchNorm**; Kingma & Ba (2015) — **Adam**.
+- Parkhi et al. (2012) — **Oxford-IIIT Pet**.
+- Documentação: PyTorch, torchvision.
 
----
+## Como validamos (corretude)
 
-## Verificação (teste de ponta a ponta)
-
-1. Abrir `segmentacao_pets.ipynb` no Google Colab com runtime **GPU**.
-2. *Run all* — download automático do dataset; conferir split (3.680/3.669) e amostras.
-3. Treinar baseline U-Net e checar curvas (`history` registra loss e mIoU por época).
-4. Rodar os 3 experimentos; conferir tabela-resumo (mIoU/Dice/pixel acc).
-5. Avaliação final no teste **somente ao fim**; gerar overlays em `imagens/`.
-6. Confirmar que **nenhum** modelo usa pesos pré-treinados (tudo do zero).
-7. Revisar `RELATORIO.md` cobrindo os 6 itens e validar as figuras referenciadas.
+- Verificação de shape entrada→saída e contagem de parâmetros de cada arquitetura.
+- Teste trivial das métricas (predição = GT ⇒ IoU = Dice = 1).
+- Overfit de 1 batch (a perda deve cair para ~0).
+- `seed=42` fixo em `random`/`numpy`/`torch` para reprodutibilidade.
+- Execução de ponta a ponta no Colab (notebook roda do início ao fim; figuras geradas).

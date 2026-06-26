@@ -1,6 +1,6 @@
 # Segmentação Semântica de Animais de Estimação com FCN-8s, U-Net e DeepLabV3+
 
-**Disciplina:** Visão Computacional — UFMS
+**Disciplina:** Visão Computacional, UFMS
 
 **Integrantes:** Jerfferson Jorge e Rafael Tsutomu
 
@@ -11,33 +11,41 @@
 ## 1. Introdução
 
 ### Descrição do problema
-O objetivo é realizar **segmentação semântica** de imagens de animais de estimação: atribuir a
-**cada pixel** uma de três classes — **animal**, **fundo** e **borda** (contorno do animal).
-Diferente da classificação de imagens (foco do Trabalho 2), a segmentação exige predição densa, com
-preservação da estrutura espacial; os principais desafios são a recuperação de resolução após o
-*encoder* e a delimitação correta dos contornos.
+O objetivo deste trabalho é realizar segmentação semântica de imagens de animais de estimação, ou
+seja, atribuir a cada pixel da imagem uma de três classes possíveis: animal, fundo e borda (o
+contorno do animal). Diferentemente da classificação de imagens, que foi o foco do Trabalho 2, a
+segmentação exige uma predição densa e a preservação da estrutura espacial da cena. Por isso, os
+principais desafios da tarefa são recuperar a resolução espacial após a etapa de codificação e
+delimitar corretamente os contornos dos objetos.
 
 ### Objetivo do trabalho
-1. Implementar **do zero** três arquiteturas representativas de segmentação — **FCN-8s**, **U-Net** e
-   **DeepLabV3+** — e compará-las sob o mesmo protocolo de treino.
-2. Avaliar quatro fatores por meio de ablações na melhor arquitetura: **função de perda**,
-   **data augmentation**, **Batch Normalization** e **transfer learning**.
-3. Reportar métricas adequadas a segmentação (mIoU, Dice, *pixel accuracy*), com análise por classe e
-   por imagem, além de exemplos visuais das predições.
+O trabalho tem três objetivos centrais. O primeiro é implementar três arquiteturas
+representativas de segmentação, a FCN-8s, a U-Net e a DeepLabV3+, comparando-as sob um mesmo protocolo
+de treino. O segundo é avaliar, por meio de ablações na melhor arquitetura, o efeito de quatro
+fatores: a função de perda, o uso de data augmentation, a presença de Batch Normalization e o uso de
+transfer learning. O terceiro é reportar métricas adequadas à tarefa de segmentação (mIoU, Dice e
+pixel accuracy), acompanhadas de análise por classe, análise por imagem e exemplos visuais das
+predições.
 
 ---
 
 ## 2. Base de imagens
 
-- **Nome / fonte:** **Oxford-IIIT Pet** (Parkhi et al., 2012), carregado via
-  `torchvision.datasets.OxfordIIITPet` com `target_types="segmentation"` (download automático).
-- **Quantidade:** 7.349 imagens de 37 raças de cães e gatos, cada uma com uma máscara *trimap*.
-- **Classes (3):** os valores originais do trimap — `1` (animal), `2` (fundo) e `3` (borda) — são
-  **remapeados para `0` (animal), `1` (fundo) e `2` (borda)** para uso com `CrossEntropyLoss`. A
-  classe **borda** é a mais rara e a mais difícil (poucos pixels, alta ambiguidade).
-- **Divisão dos dados:** usamos o split oficial `trainval` e `test`. Do `trainval` separamos
-  **treino/validação 80/20** com gerador semeado (`seed=42`); o conjunto de **teste** foi usado
-  apenas na avaliação final.
+A base utilizada foi a Oxford-IIIT Pet (Parkhi et al., 2012), carregada por meio de
+`torchvision.datasets.OxfordIIITPet` com `target_types="segmentation"`, o que faz o download dos
+dados automaticamente. O conjunto reúne 7.349 imagens de 37 raças de cães e gatos, e cada imagem
+possui uma máscara *trimap* anotada pixel a pixel.
+
+A máscara original do *trimap* usa os valores 1 para o animal, 2 para o fundo e 3 para a borda. Esses
+valores foram remapeados para 0 (animal), 1 (fundo) e 2 (borda), de modo a servirem como rótulo para
+a `CrossEntropyLoss`. Vale destacar desde já que a classe borda é a mais rara e a mais difícil do
+conjunto, pois corresponde a poucos pixels e apresenta ambiguidade natural na transição entre o
+animal e o fundo.
+
+Quanto à divisão dos dados, usamos o split oficial do dataset, que separa os conjuntos `trainval` e
+`test`. A partir do `trainval`, separamos treino e validação em uma proporção de 80/20 usando um
+gerador com semente fixa (`seed=42`), enquanto o conjunto de teste foi reservado exclusivamente para
+a avaliação final.
 
 | Conjunto | Imagens |
 |---|---|
@@ -45,44 +53,57 @@ preservação da estrutura espacial; os principais desafios são a recuperação
 | Validação | 736 |
 | Teste | 3.669 |
 
-**Exemplos** (imagem | máscara *ground-truth* | sobreposição):
+A figura a seguir mostra exemplos do dataset, apresentando para cada amostra a imagem, sua máscara
+*ground-truth* e a sobreposição das duas.
 
 ![Amostras do dataset](imagens/amostras.png)
 
 ### Pré-processamento
-- Redimensionamento para **128×128**. Máscaras redimensionadas com interpolação **nearest** (para não
-  gerar rótulos inválidos por interpolação).
-- **Normalização ImageNet** (média `[0.485, 0.456, 0.406]`, desvio `[0.229, 0.224, 0.225]`),
-  necessária para o encoder pré-treinado e adotada de forma consistente em todos os modelos.
+Todas as imagens foram redimensionadas para 128×128. As máscaras foram redimensionadas com
+interpolação *nearest*, evitando que a interpolação gere rótulos inválidos entre as classes. Além
+disso, as imagens foram normalizadas com a média e o desvio padrão do ImageNet (média
+`[0.485, 0.456, 0.406]` e desvio `[0.229, 0.224, 0.225]`), o que é necessário para o encoder
+pré-treinado e foi adotado de forma consistente em todos os modelos para garantir uma comparação
+justa.
 
 ---
 
 ## 3. Metodologia
 
 ### Tipo de tarefa
-Segmentação semântica multiclasse (3 classes), predição densa pixel a pixel.
+Trata-se de segmentação semântica multiclasse, com três classes, realizando predição densa pixel a
+pixel.
 
-### Arquiteturas (todas implementadas do zero)
-- **FCN-8s** (Long et al., 2015) — *baseline*. Encoder convolucional estilo VGG; classificação por
-  `Conv1×1` em baixa resolução; *upsampling* por `ConvTranspose2d` com **fusão aditiva** dos mapas
-  intermediários `pool3` e `pool4` (*skip connections* grosseiras). **20,50 M** parâmetros.
-- **U-Net** (Ronneberger et al., 2015) — *encoder-decoder* simétrico com **skip connections por
-  concatenação** em todos os níveis (`DoubleConv` + `Down`/`Up`). **31,04 M** parâmetros.
-- **DeepLabV3+** (Chen et al., 2018) — *backbone* ResNet (do zero) com **atrous convolutions**
-  (*output stride* 16), **ASPP** (contexto multi-escala) e **decoder** com fusão de *low-level
-  features*. **16,60 M** parâmetros.
+### Arquiteturas
+A FCN-8s (Long et al., 2015) é o nosso *baseline*. Ela emprega um encoder convolucional no estilo VGG,
+faz a classificação por uma convolução 1×1 em baixa resolução e recupera a resolução com
+`ConvTranspose2d`, fundindo de forma aditiva os mapas intermediários `pool3` e `pool4` por meio de
+*skip connections* grosseiras. No total, possui 20,50 milhões de parâmetros.
 
-A inicialização de pesos é **Kaiming (He)** em todas as convoluções.
+A U-Net (Ronneberger et al., 2015) é um *encoder-decoder* simétrico cujo diferencial são as *skip
+connections* por concatenação presentes em todos os níveis, ligando o caminho de contração ao de
+expansão (blocos `DoubleConv`, `Down` e `Up`). É a maior das três arquiteturas, com 31,04 milhões de
+parâmetros.
+
+A DeepLabV3+ (Chen et al., 2018) utiliza um *backbone* ResNet com
+*atrous convolutions* (mantendo *output stride* 16), o módulo ASPP para capturar contexto em múltiplas
+escalas e um decoder que funde *low-level features*. É a mais compacta das três, com 16,60 milhões de
+parâmetros.
+
+Em todas as arquiteturas, a inicialização dos pesos das convoluções segue o esquema de Kaiming (He).
 
 ### Data augmentation
-Aplicado **apenas no treino** e **sincronizado** entre imagem e máscara (classe `JointTransform`):
-flip horizontal, `RandomAffine` (rotação ±15°, translação ±10%) e `ColorJitter` (brilho/contraste/
-saturação, **só na imagem**).
+O *augmentation* é aplicado apenas no conjunto de treino e de forma sincronizada entre a imagem e a
+máscara, por meio da classe `JointTransform`. As transformações usadas são o flip horizontal, a
+`RandomAffine` (com rotação de até ±15° e translação de até ±10%) e a `ColorJitter` (variando brilho,
+contraste e saturação). A `ColorJitter` é aplicada somente na imagem, já que alterar as cores não faz
+sentido para a máscara de rótulos.
 
 ### Funções de perda
-- **CrossEntropy** (`nn.CrossEntropyLoss`) — baseline.
-- **Dice loss** (implementada do zero) — otimiza diretamente a sobreposição.
-- **Combo CE+Dice** (do zero) — soma das duas.
+Foram consideradas três funções de perda. A `CrossEntropyLoss` serve como baseline padrão para
+classificação por pixel. A Dice loss otimiza diretamente a sobreposição entre
+a predição e o *ground-truth*. Por fim, a combinação CE+Dice soma as
+duas perdas, buscando unir a estabilidade da entropia cruzada ao foco em sobreposição do Dice.
 
 ### Hiperparâmetros principais
 | Hiperparâmetro | Valor |
@@ -96,30 +117,34 @@ saturação, **só na imagem**).
 | Resolução | 128×128 |
 | Semente | 42 |
 
-A seleção do melhor modelo usa **checkpoint pelo maior mIoU de validação**.
+A seleção do melhor modelo de cada treino é feita por *checkpoint*, guardando os pesos da época com
+maior mIoU de validação.
 
 ### Ferramentas e bibliotecas
-PyTorch (CUDA), torchvision (dataset, transforms, pesos pré-treinados da ResNet-34), NumPy e
-Matplotlib. **Implementados do zero:** as três arquiteturas (blocos e `forward`), as perdas Dice e
-CE+Dice, as métricas (IoU/mIoU, Dice, *pixel accuracy* via matriz de confusão) e o laço de treino.
-**De biblioteca:** primitivas `nn.*`, download do dataset, otimizador/scheduler e pesos pré-treinados
-(somente na ablação de *transfer learning*). Detalhes em `PLANEJAMENTO.md`.
+O projeto foi desenvolvido em PyTorch com aceleração CUDA, usando o torchvision para o dataset, as
+transformações e os pesos pré-treinados da ResNet-34, além de NumPy e Matplotlib. Implementamos
+as três arquiteturas (seus blocos e o método `forward`), as perdas Dice e CE+Dice, as
+métricas (IoU, mIoU, Dice e pixel accuracy, calculadas a partir de uma matriz de confusão) e o laço
+de treino. Recorremos a bibliotecas apenas para as primitivas `nn.*`, o download do dataset, o
+otimizador e o *scheduler*, e os pesos pré-treinados, estes últimos usados somente na ablação de
+*transfer learning*. A distinção completa entre o que é próprio e o que é de biblioteca está
+documentada no `PLANEJAMENTO.md`.
 
 ---
 
 ## 4. Experimentos
 
 ### 4.1 Comparativo de arquiteturas
-As três arquiteturas treinadas no **mesmo protocolo**: perda CrossEntropy, 30 épocas, sem
-augmentation, `seed=42`. Comparadas por mIoU/Dice/pixel accuracy, número de parâmetros e tempo de
-treino.
+As três arquiteturas foram treinadas sob exatamente o mesmo protocolo, com perda CrossEntropy, 30
+épocas, sem *augmentation* e com `seed=42`. A comparação considera mIoU, Dice e pixel accuracy, além
+do número de parâmetros e do tempo de treino de cada modelo.
 
-### 4.2 Ablações (na melhor arquitetura)
-Variando **um fator por vez**, com 15 épocas e `seed=42`:
-1. **Função de perda:** CE vs Dice vs CE+Dice.
-2. **Data augmentation:** com vs sem.
-3. **Batch Normalization:** com vs sem (U-Net, via `use_bn`).
-4. **Transfer learning:** encoder ResNet-34 pré-treinado (ImageNet) vs do zero.
+### 4.2 Ablações na melhor arquitetura
+A partir da melhor arquitetura do comparativo, variamos um fator por vez, sempre com 15 épocas e
+`seed=42`. Os fatores avaliados foram a função de perda (CE, Dice e CE+Dice), o uso de data
+augmentation (com e sem), a presença de Batch Normalization (com e sem, controlada pelo parâmetro
+`use_bn` da U-Net) e o transfer learning (encoder ResNet-34 pré-treinado no ImageNet contra o mesmo
+encoder treinado do zero).
 
 ---
 
@@ -135,15 +160,14 @@ Variando **um fator por vez**, com 15 épocas e `seed=42`:
 
 ![Comparativo de arquiteturas](imagens/comparativo_arquiteturas.png)
 
-- A **U-Net venceu** em todas as métricas (mIoU 0,7282), com curva de validação consistentemente
-  acima das demais a partir da época ~8.
-- O **DeepLabV3+** convergiu rápido no início, mas sua **perda de validação volta a subir após a
-  época ~12** (sinal de *overfitting*), terminando ligeiramente atrás da FCN-8s em mIoU apesar de ser
-  o modelo com **menos parâmetros** (16,60 M) e o **mais rápido** de treinar (583 s).
-- A **FCN-8s** converge de forma mais lenta e ruidosa (queda de mIoU na época 19), mas estabiliza em
-  0,6788.
-- O **custo de treino** acompanha a profundidade efetiva: U-Net foi a mais cara (1460 s), cerca do
-  dobro das outras duas.
+A U-Net venceu em todas as métricas, atingindo um mIoU de 0,7282, e sua curva de validação ficou
+consistentemente acima das demais a partir da oitava época, aproximadamente. A DeepLabV3+ convergiu
+rápido no início, mas a sua perda de validação voltou a subir após a décima segunda época, um sinal
+claro de *overfitting*, e terminou ligeiramente atrás da FCN-8s em mIoU, ainda que seja o modelo com
+menos parâmetros (16,60 milhões) e o mais rápido de treinar (583 segundos). A FCN-8s, por sua vez,
+convergiu de forma mais lenta e ruidosa, com uma queda visível de mIoU na décima nona época, mas
+acabou estabilizando em 0,6788. O custo de treino acompanhou a profundidade efetiva de cada rede: a
+U-Net foi a mais cara, com 1460 segundos, cerca do dobro das outras duas.
 
 ### 5.2 Ablações (mIoU de validação, U-Net, 15 épocas)
 
@@ -161,20 +185,23 @@ Variando **um fator por vez**, com 15 épocas e `seed=42`:
 
 ![Ablações](imagens/ablacoes.png)
 
-- **Função de perda:** **Dice** (0,7242) superou CE+Dice (0,7186) e CE puro (0,7139). A perda baseada
-  em sobreposição ajudou a métrica de IoU.
-- **Data augmentation:** ganho pequeno mas positivo (0,7114 vs 0,7070). Com apenas 15 épocas e dataset
-  pequeno, o efeito regularizador ainda é modesto.
-- **Batch Normalization:** **acelerou e melhorou** o treino (0,7040 com BN vs 0,6880 sem BN).
-- **Transfer learning:** **maior impacto de todos**. O encoder ResNet-34 pré-treinado no ImageNet
-  atingiu **0,7507 em apenas 15 épocas** — superando inclusive a U-Net do zero treinada por 30 épocas
-  (0,7282). O encoder ResNet-34 do zero (sem pré-treino) ficou em 0,6875, o que isola o ganho como
-  efeito do **pré-treino**, não da arquitetura do encoder.
+Em relação à função de perda, a Dice (0,7242) superou tanto a combinação CE+Dice (0,7186) quanto a
+entropia cruzada pura (0,7139), o que indica que otimizar diretamente a sobreposição beneficiou a
+métrica de IoU. O data augmentation trouxe um ganho pequeno, porém positivo (0,7114 contra 0,7070);
+com apenas 15 épocas e um dataset relativamente pequeno, o efeito regularizador ainda é modesto. O
+Batch Normalization também ajudou, acelerando e melhorando o treino (0,7040 com BN contra 0,6880 sem
+BN).
+
+O fator de maior impacto, no entanto, foi o transfer learning. O encoder ResNet-34 pré-treinado no
+ImageNet alcançou 0,7507 em apenas 15 épocas, superando inclusive a U-Net treinada do zero por 30
+épocas (0,7282). Como o mesmo encoder ResNet-34 treinado do zero, sem pré-treino, ficou em 0,6875,
+fica claro que o ganho vem do pré-treino em si, e não da arquitetura do encoder.
 
 ### 5.3 Avaliação final no conjunto de teste
 
-Melhor arquitetura do comparativo: **U-Net** (melhores pesos por mIoU de validação), avaliada no
-**conjunto de teste oficial** (3.669 imagens, nunca usado em treino/validação).
+A melhor arquitetura do comparativo, a U-Net, foi avaliada com os seus melhores pesos (selecionados
+pelo mIoU de validação) no conjunto de teste oficial, composto por 3.669 imagens nunca usadas em
+treino ou validação.
 
 | Métrica | Valor |
 |---|---|
@@ -182,7 +209,9 @@ Melhor arquitetura do comparativo: **U-Net** (melhores pesos por mIoU de valida�
 | Dice | 0,8395 |
 | Pixel accuracy | 0,9010 |
 
-**IoU por classe:**
+Olhando a IoU por classe, fica evidente o contraste entre elas. O fundo é a classe mais fácil
+(0,8995) e o animal também é bem segmentado (0,8158), mas a borda é, de longe, a mais difícil
+(0,5071), e é justamente ela que puxa o mIoU para baixo.
 
 | Classe | IoU |
 |---|---|
@@ -190,93 +219,96 @@ Melhor arquitetura do comparativo: **U-Net** (melhores pesos por mIoU de valida�
 | fundo | 0,8995 |
 | **borda** | **0,5071** |
 
-A classe **fundo** é a mais fácil (0,8995) e a **borda** é, de longe, a mais difícil (0,5071),
-puxando o mIoU para baixo.
-
-**Matriz de confusão** (normalizada por linha / classe verdadeira, em nível de pixel):
+Esse diagnóstico é reforçado pela matriz de confusão em nível de pixel, normalizada por classe
+verdadeira.
 
 ![Matriz de confusão](imagens/matriz_confusao.png)
 
-A matriz confirma o diagnóstico: as classes **animal** e **fundo** têm alta taxa na diagonal,
-enquanto os pixels de **borda** são frequentemente confundidos com **animal** e **fundo** — esperado,
-pois a borda é uma faixa fina de transição entre as outras duas classes.
+O padrão é coerente com as IoU por classe. O fundo é acertado em 95% dos seus pixels e o animal em
+91%, ambos com pouca dispersão para fora da diagonal. A borda, por sua vez, é acertada em apenas 63%
+dos casos, sendo confundida de forma quase equilibrada com animal (18%) e com fundo (19%). Esse
+comportamento é esperado, já que a borda é uma faixa estreita de transição entre as outras duas
+classes.
 
-**Distribuição por imagem** (a partir de `PETS_RESULTS.csv`, 3.669 imagens):
+Para entender o desempenho além das métricas agregadas, calculamos também a distribuição do mIoU por
+imagem sobre as 3.669 imagens do teste.
 
 | Estatística (mIoU por imagem) | Valor |
 |---|---|
 | Média | 0,7356 |
 | Mediana | 0,7625 |
 | Desvio padrão | 0,1118 |
-| Q25 – Q75 | 0,6859 – 0,8145 |
-| Mínimo / Máximo | 0,0083 / 0,9098 |
+| Q25 a Q75 | 0,6859 a 0,8145 |
+| Mínimo a Máximo | 0,0083 a 0,9098 |
 | Imagens com mIoU > 0,7 | 2.613 (71,2%) |
 | Imagens com mIoU > 0,8 | 1.198 (32,7%) |
 | Imagens com mIoU < 0,5 | 153 (4,2%) |
 
-A maioria das imagens (71,2%) tem mIoU acima de 0,7 e apenas 4,2% ficam abaixo de 0,5, indicando
-desempenho robusto com poucos casos de falha grave.
-
-**Exemplos de predições** (imagem | *ground-truth* | predição):
+A distribuição mostra um desempenho robusto, com a maioria das imagens (71,2%) acima de 0,7 de mIoU e
+apenas 4,2% delas abaixo de 0,5, o que indica poucos casos de falha grave. A figura abaixo apresenta
+alguns exemplos de predições, com a imagem, o *ground-truth* e a predição lado a lado.
 
 ![Predições no teste](imagens/predicoes_teste.png)
 
-As predições reproduzem bem a silhueta do animal e o fundo; os erros se concentram na **faixa de
-borda** e em cenas com **camuflagem/fundo complexo** (ex.: a 4ª linha da figura), coerente com a baixa
-IoU da classe borda e com os casos de mIoU mínimo na distribuição por imagem.
+As predições reproduzem bem a silhueta do animal e a região de fundo. Os erros se concentram na faixa
+de borda e em cenas com camuflagem ou fundo complexo, como na quarta linha da figura, o que é
+coerente tanto com a baixa IoU da classe borda quanto com os casos de mIoU mínimo observados na
+distribuição por imagem.
 
 ---
 
 ## 6. Discussão
 
 ### Pontos fortes da solução
-- **Comparativo justo e reprodutível:** três arquiteturas implementadas do zero, mesmo protocolo,
-  mesma semente. A **U-Net** se mostrou a melhor escolha *do zero* para este dataset pequeno, graças
-  às *skip connections* densas que recuperam detalhes espaciais.
-- **Transfer learning** foi a alavanca mais eficaz: o encoder ResNet-34 pré-treinado atingiu o melhor
-  mIoU (0,7507) na metade das épocas, confirmando o valor de *features* pré-treinadas mesmo em um
-  domínio (animais) diferente do ImageNet.
-- **Bom desempenho global:** pixel accuracy de 0,9010 e 71,2% das imagens com mIoU > 0,7 no teste.
+O comparativo conduzido é justo e reprodutível, pois as três arquiteturas foram treinadas sob o
+mesmo protocolo e a mesma semente. Nesse cenário, a U-Net se mostrou a melhor
+escolha treinada do zero para um dataset de tamanho reduzido, o que se explica pelas suas *skip
+connections* densas, capazes de recuperar bem os detalhes espaciais. O transfer learning foi a
+alavanca mais eficaz de todas: o encoder ResNet-34 pré-treinado atingiu o melhor mIoU (0,7507) na
+metade das épocas, confirmando o valor das *features* pré-treinadas mesmo em um domínio (animais)
+diferente do ImageNet. No conjunto, o desempenho global foi bom, com pixel accuracy de 0,9010 e 71,2%
+das imagens do teste acima de 0,7 de mIoU.
 
 ### Limitações do modelo
-- **Classe borda** é o gargalo (IoU 0,5071): poucos pixels e ambiguidade intrínseca do contorno. As
-  perdas baseadas em Dice ajudaram, mas não resolveram.
-- **Resolução 128×128** limita o detalhamento dos contornos; resoluções maiores tendem a beneficiar
-  justamente a classe borda, ao custo de tempo.
-- **DeepLabV3+ do zero** mostrou *overfitting* (perda de validação crescente) — arquiteturas com
-  *backbone* tipo ResNet são mais dependentes de pré-treino e de mais dados.
+A principal limitação é a classe borda, que se mostrou o gargalo do modelo com IoU de apenas 0,5071,
+em razão dos poucos pixels que ocupa e da ambiguidade intrínseca do contorno. As perdas baseadas em
+Dice ajudaram, mas não resolveram esse problema. A resolução de 128×128 também limita o detalhamento
+dos contornos, e resoluções maiores tendem a beneficiar justamente a classe borda, ainda que ao custo
+de mais tempo de treino. Por fim, a DeepLabV3+ treinada do zero apresentou *overfitting*, com perda de
+validação crescente, o que reforça que arquiteturas com *backbone* do tipo ResNet são mais
+dependentes de pré-treino e de uma quantidade maior de dados.
 
 ### Principais dificuldades encontradas
-- Sincronizar as transformações geométricas entre **imagem e máscara** (resolvido com a
-  `JointTransform`, usando interpolação *nearest* na máscara).
-- *Batch Normalization* no ramo de *pooling* global do **ASPP** com batches pequenos (mitigado por
-  `drop_last=True` no treino e estatísticas acumuladas na avaliação).
-- **Custo computacional** de treinar três arquiteturas por 30 épocas mais nove ablações — exigiu GPU
-  (Google Colab).
+Uma dificuldade prática foi sincronizar as transformações geométricas entre a imagem e a máscara,
+resolvida com a classe `JointTransform` e o uso de interpolação *nearest* na máscara. Outra foi lidar
+com o Batch Normalization no ramo de *pooling* global do ASPP quando os batches são pequenos, o que
+foi mitigado pelo uso de `drop_last=True` no treino e pelas estatísticas acumuladas durante a
+avaliação. Houve ainda o custo computacional de treinar três arquiteturas por 30 épocas somado às
+nove ablações, o que exigiu o uso de GPU no Google Colab.
 
 ### Possíveis melhorias futuras
-- Combinar as duas melhores descobertas: **U-Net com encoder pré-treinado + perda Dice**, treinada por
-  mais épocas e em **256×256**.
-- *Backbone* mais profundo (ResNet-50) com atrous, e **perda de Dice generalizada** (Sudre et al.,
-  2017) ponderada por classe para reforçar a borda.
-- Pós-processamento de contornos (CRF) e augmentation mais agressivo com mais épocas.
+Um caminho natural é combinar as duas melhores descobertas do trabalho, treinando uma U-Net com
+encoder pré-treinado e perda Dice por mais épocas e em resolução 256×256. Também seria interessante
+testar um *backbone* mais profundo, como a ResNet-50 com *atrous convolutions*, e adotar uma perda de
+Dice generalizada (Sudre et al., 2017) ponderada por classe para reforçar especificamente a borda.
+Por fim, um pós-processamento de contornos com CRF e um *augmentation* mais agressivo, acompanhado de
+mais épocas de treino, poderiam refinar ainda mais os resultados.
 
 ---
 
 ## 7. Conclusão
 
-### Melhor modelo encontrado
-Entre as arquiteturas treinadas do zero, a **U-Net** foi a melhor (teste: **mIoU 0,7408**,
-**Dice 0,8395**, **pixel accuracy 0,9010**). Nas ablações, a configuração de maior mIoU de validação
-foi a **U-Net com encoder ResNet-34 pré-treinado** (**0,7507**), apontando o caminho da melhor solução
-final.
+Entre as arquiteturas treinadas do zero, a U-Net foi a melhor, alcançando no teste um mIoU de 0,7408,
+Dice de 0,8395 e pixel accuracy de 0,9010. Já entre todas as configurações avaliadas nas ablações, a
+de maior mIoU de validação foi a U-Net com encoder ResNet-34 pré-treinado, com 0,7507, o que aponta o
+caminho para a melhor solução final.
 
-### Principais aprendizados
-- Em datasets pequenos, *skip connections* densas (U-Net) superam arquiteturas com mais contexto mas
-  mais dependentes de dados/pré-treino (DeepLabV3+).
-- *Transfer learning* e *Batch Normalization* trazem ganhos claros; perdas baseadas em Dice ajudam a
-  métrica de IoU, sobretudo nas classes raras.
-- A classe **borda** é o principal limitador e o alvo natural de trabalhos futuros.
+Os principais aprendizados do trabalho podem ser resumidos em três pontos. Primeiro, em datasets
+pequenos, as *skip connections* densas da U-Net superam arquiteturas com mais contexto, porém mais
+dependentes de dados e de pré-treino, como a DeepLabV3+. Segundo, tanto o transfer learning quanto o
+Batch Normalization trazem ganhos claros, e as perdas baseadas em Dice ajudam a métrica de IoU,
+sobretudo nas classes raras. Terceiro, a classe borda é o principal fator limitante do desempenho e
+se confirma como o alvo mais promissor para trabalhos futuros.
 
 ---
 

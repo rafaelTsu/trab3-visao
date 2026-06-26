@@ -16,7 +16,6 @@ experimentos controlados de função de perda, *data augmentation*, *Batch Norma
 | `PLANEJAMENTO.md` | Planejamento do projeto e do diretório |
 | `requirements.txt` | Dependências |
 | `imagens/` | Figuras geradas pelo notebook |
-| `PETS_RESULTS.csv` | Métricas por imagem no conjunto de teste (gerado ao executar) |
 
 ## Como executar
 
