@@ -66,7 +66,7 @@ Aplicadas **apenas no treino** e **sincronizadas** entre imagem e máscara (clas
 Calculadas a partir de uma **matriz de confusão** acumulada: **IoU por classe** e **mIoU** (métrica principal), **Dice coefficient**, **pixel accuracy**, além de curvas de loss/mIoU por época e da **distribuição do mIoU por imagem**.
 
 ### Ferramentas e bibliotecas
-**PyTorch** (CUDA), **torchvision** (dataset, transforms e pesos pré-treinados da ResNet-34), **NumPy** e **Matplotlib**. Implementamos as **três arquiteturas** (blocos e `forward`), as **perdas** Dice e CE+Dice, as **métricas** e o **laço de treino**; recorremos a bibliotecas apenas para as primitivas `nn.*`, o download do dataset, o otimizador/scheduler e os pesos pré-treinados (usados só na ablação de *transfer learning*). A distinção completa está no `PLANEJAMENTO.md`.
+**PyTorch** (CUDA), **torchvision** (dataset, transforms e pesos pré-treinados da ResNet-34), **NumPy** e **Matplotlib**. Implementamos as **três arquiteturas** (blocos e `forward`), as **perdas** Dice e CE+Dice, as **métricas** e o **laço de treino**; recorremos a bibliotecas apenas para as primitivas `nn.*`, o download do dataset, o otimizador/scheduler e os pesos pré-treinados (usados só na ablação de *transfer learning*).
 
 ---
 
